@@ -130,11 +130,32 @@
 
       <div
         class="relative mx-auto max-w-3xl mb-10 rounded-2xl overflow-hidden ring-1 ring-[#38B6FF]/30 shadow-[0_20px_60px_-20px_rgba(56,182,255,0.4)]">
-        <div style="position:relative;padding-top:56.25%;">
-          <iframe src="https://player.vimeo.com/video/1208318016?dnt=1"
-            style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
-            title="Better Body Academy" allow="autoplay; fullscreen; picture-in-picture; clipboard-write"
-            allowfullscreen loading="lazy"></iframe>
+        <div class="hv" id="hv">
+          <div class="hv__stage">
+            <iframe id="hvFrame" class="hv__iframe"
+              src="https://player.vimeo.com/video/1208318016?controls=0&amp;dnt=1&amp;playsinline=1&amp;title=0&amp;byline=0&amp;portrait=0"
+              allow="autoplay; fullscreen; picture-in-picture" allowfullscreen
+              title="Better Body Academy"></iframe>
+            <button class="hv__big" id="hvBig" type="button" aria-label="Play video">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+          <div class="hv__bar" id="hvBar">
+            <button class="hv__ctrl" id="hvToggle" type="button" aria-label="Play / Pause">
+              <svg class="hv-ico-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+              <svg class="hv-ico-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+            </button>
+            <span class="hv__time" id="hvCur">0:00</span>
+            <div class="hv__track" id="hvTrack"><div class="hv__fill" id="hvFill"><span class="hv__knob"></span></div></div>
+            <span class="hv__time" id="hvDur">0:00</span>
+            <button class="hv__ctrl" id="hvMute" type="button" aria-label="Mute / Unmute">
+              <svg class="hv-ico-vol" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg>
+              <svg class="hv-ico-mute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9v6h4l5 5V4L8 9H4z" fill="currentColor" stroke="none"/><path d="M16 8l5 8M21 8l-5 8"/></svg>
+            </button>
+            <button class="hv__ctrl" id="hvFs" type="button" aria-label="Fullscreen">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1122,6 +1143,71 @@
   </footer>
 
   <script src="men.js"></script>
+  <script src="https://player.vimeo.com/api/player.js"></script>
+  <script>
+    (function () {
+      var root = document.getElementById('hv');
+      if (!root || !window.Vimeo) return;
+      var iframe = document.getElementById('hvFrame');
+      var player = new Vimeo.Player(iframe);
+      var big = document.getElementById('hvBig');
+      var toggle = document.getElementById('hvToggle');
+      var mute = document.getElementById('hvMute');
+      var fs = document.getElementById('hvFs');
+      var track = document.getElementById('hvTrack');
+      var fill = document.getElementById('hvFill');
+      var curEl = document.getElementById('hvCur');
+      var durEl = document.getElementById('hvDur');
+      var duration = 0, seeking = false;
+
+      function fmt(s) {
+        s = Math.max(0, Math.floor(s || 0));
+        var m = Math.floor(s / 60), ss = s % 60;
+        return m + ':' + (ss < 10 ? '0' : '') + ss;
+      }
+
+      player.getDuration().then(function (d) { duration = d; durEl.textContent = fmt(d); }).catch(function () {});
+      player.on('play', function () { root.classList.add('is-playing'); root.classList.remove('is-paused'); });
+      player.on('pause', function () { root.classList.remove('is-playing'); root.classList.add('is-paused'); });
+      player.on('ended', function () { root.classList.remove('is-playing'); root.classList.add('is-paused'); fill.style.width = '0%'; });
+      player.on('timeupdate', function (d) {
+        if (!duration && d.duration) { duration = d.duration; durEl.textContent = fmt(d.duration); }
+        if (!seeking) {
+          var p = d.duration ? d.seconds / d.duration : 0;
+          fill.style.width = (p * 100) + '%';
+          curEl.textContent = fmt(d.seconds);
+        }
+      });
+      player.on('volumechange', function (d) {
+        if (d.volume === 0) root.classList.add('is-muted'); else root.classList.remove('is-muted');
+      });
+
+      function play() { player.play().catch(function () {}); }
+      function pause() { player.pause().catch(function () {}); }
+      big.addEventListener('click', play);
+      toggle.addEventListener('click', function () { root.classList.contains('is-playing') ? pause() : play(); });
+      mute.addEventListener('click', function () {
+        player.getVolume().then(function (v) {
+          if (v === 0) { player.setVolume(1); } else { player.setVolume(0); }
+        });
+      });
+      fs.addEventListener('click', function () {
+        if (player.requestFullscreen) player.requestFullscreen().catch(function () {});
+        else if (iframe.requestFullscreen) iframe.requestFullscreen();
+      });
+
+      function posFromEvent(e) {
+        var r = track.getBoundingClientRect();
+        var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        return Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+      }
+      function preview(e) { var p = posFromEvent(e); fill.style.width = (p * 100) + '%'; curEl.textContent = fmt(p * duration); return p; }
+      track.addEventListener('mousedown', function (e) { seeking = true; preview(e); });
+      document.addEventListener('mousemove', function (e) { if (seeking) preview(e); });
+      document.addEventListener('mouseup', function (e) { if (seeking) { var p = preview(e); seeking = false; player.setCurrentTime(p * duration).catch(function () {}); } });
+      track.addEventListener('click', function (e) { var p = posFromEvent(e); player.setCurrentTime(p * duration).catch(function () {}); });
+    })();
+  </script>
 </body>
 
 </html>
